@@ -1,11 +1,60 @@
-elf.addEventListener("install", (event) => {
+const CACHE_NAME = 'mocoo-cache-v1';
+const urlsToCache = [
+  '/', // Halaman utama
+  '/index.html',
+  '/styles.css', // Ganti dengan file CSS kamu
+  '/script.js',  // Ganti dengan file JS kamu
+  '/logo.png',   // Ganti dengan aset lain yang diperlukan
+];
+
+// Saat Service Worker diinstal, simpan semua file dalam cache
+self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open("blog-cache").then((cache) => {
-      return cache.addAll(["/"]);
-    })
+    caches.open(CACHE_NAME)
+      .then((cache) => {
+        console.log('Caching semua file penting');
+        return cache.addAll(urlsToCache);
+      })
   );
 });
 
-self.addEventListener("fetch", (event) => {
+// Tangkap semua permintaan dan ambil dari cache jika ada
+self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request).then((response) => {
+    caches.match(event.request)
+      .then((response) => {
+        // Jika ada di cache, gunakan cache
+        if (response) {
+          return response;
+        }
+
+        // Jika tidak ada di cache, unduh dari server dan cache secara otomatis
+        return fetch(event.request).then((networkResponse) => {
+          return caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, networkResponse.clone());
+            return networkResponse;
+          });
+        });
+      })
+      .catch(() => {
+        // Jika offline dan tidak ada di cache, bisa tampilkan halaman fallback
+        return caches.match('/index.html');
+      })
+  );
+});
+
+// Hapus cache lama saat Service Worker diperbarui
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('Menghapus cache lama:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+});
